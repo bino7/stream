@@ -5,6 +5,10 @@ type Pipe struct {
 	out Stream
 }
 
+func NewPipe(in,out Stream) *Pipe{
+	return &Pipe{in,out}
+}
+
 func (p *Pipe) In() chan <-interface{} {
 	return p.in
 }
