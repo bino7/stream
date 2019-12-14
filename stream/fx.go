@@ -19,6 +19,13 @@ type (
 	KeySelectorFunc func(interface{}) interface{}
 
 	// HandleFunc defines a func that should be passed to the Distinct operator.
-	HandleFunc func(interface{})
-)
+	HandleFunc func(interface{}) interface{}
 
+	ConsumeFunc func(interface{})
+
+	ClassifyFunc func(interface{}) string
+
+	CompareFunc func(interface{}, interface{}) int
+
+	GroupHandleFunc map[interface{}]HandleFunc
+)

@@ -1,8 +1,9 @@
 package stream
 
 import (
-	"time"
 	logger "github.com/inconshreveable/log15"
+	"sync"
+	"time"
 )
 
 var log = logger.New("module", "stream")
@@ -11,11 +12,11 @@ type Stream chan interface{}
 
 func (s Stream) To(another Stream) {
 	go func() {
-		defer func(){
-			r:=recover()
-			if r!=nil {
-				err:=r.(error)
-				if err.Error()!="send on closed channel" {
+		defer func() {
+			r := recover()
+			if r != nil {
+				err := r.(error)
+				if err.Error() != "send on closed channel" {
 					panic(err)
 				}
 			}
@@ -34,14 +35,39 @@ func (s Stream) To(another Stream) {
 	}()
 }
 func (s Stream) Handle(apply HandleFunc) Stream {
+	var wg sync.WaitGroup
+	wg.Add(1)
 	out := make(chan interface{})
+	go func() {
+		wg.Done()
+		for v := range s {
+			out <- apply(v)
+		}
+		close(out)
+	}()
+	wg.Wait()
+	return Stream(out)
+}
+
+func (s Stream) Consume(apply ConsumeFunc) {
 	go func() {
 		for v := range s {
 			apply(v)
 		}
-		close(out)
 	}()
-	return Stream(out)
+}
+
+func (s Stream) Classify(apply ClassifyFunc, handlers map[string]Stream, deadHandler Stream) {
+	go func() {
+		for v := range s {
+			class := apply(v)
+			if handler, ok := handlers[class]; ok {
+				handler <- v
+			} else {
+				deadHandler <- v
+			}
+		}
+	}()
 }
 
 func (s Stream) Map(apply MappableFunc) Stream {
@@ -121,11 +147,11 @@ func Range(start, end int) Stream {
 	return Stream(source)
 }
 
-func Repeat(item interface{}, ntimes ...int) Stream {
+func Repeat(item interface{}, nTimes ...int) Stream {
 	source := make(chan interface{})
 
 	// this is the infinity case no ntime parameter is given
-	if len(ntimes) == 0 {
+	if len(nTimes) == 0 {
 		go func() {
 			for {
 				source <- item
@@ -136,8 +162,8 @@ func Repeat(item interface{}, ntimes ...int) Stream {
 	}
 
 	// this repeat the item ntime
-	if len(ntimes) > 0 {
-		count := ntimes[0]
+	if len(nTimes) > 0 {
+		count := nTimes[0]
 		if count <= 0 {
 			return Empty()
 		}
@@ -228,6 +254,13 @@ func (s Stream) Skip(nth uint) Stream {
 	return Stream(out)
 }
 
+/*func (s Stream) Sort(apply lib.CompareFunc) Stream{
+	heap:=lib.NewHeap(apply)
+	for v:=range s {
+		heap.Push(v)
+	}
+}*/
+
 func (s Stream) DistinctUntilChanged(apply KeySelectorFunc) Stream {
 	out := make(chan interface{})
 	go func() {
@@ -312,4 +345,29 @@ func Join(a, b Stream) Stream {
 
 func (s Stream) AsChan() chan interface{} {
 	return (chan interface{})(s)
+}
+
+func FromOutbound(outbound <-chan interface{}) Stream {
+	out := make(chan interface{})
+	go func() {
+		for item := range outbound {
+			out <- item
+			break
+		}
+		close(out)
+	}()
+	return Stream(out)
+}
+
+func Source(apply EmittableFunc) Stream {
+	out := make(chan interface{})
+	go func() {
+		for {
+			for item := apply(); item != nil; item = apply() {
+				out <- item
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
+	return Stream(out)
 }
