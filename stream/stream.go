@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	logger "github.com/inconshreveable/log15"
 	"sync"
 	"time"
@@ -9,6 +10,27 @@ import (
 var log = logger.New("module", "stream")
 
 type Stream chan interface{}
+
+func New(n int) Stream {
+	return make(chan interface{}, n)
+}
+func (s Stream) IsClosed() bool {
+	select {
+	case <-s:
+		return true
+	default:
+	}
+
+	return false
+}
+func (s Stream) Close() {
+	defer func() {
+		if recover() != nil {
+			// close(ch) panic occur
+		}
+	}()
+	close(s)
+}
 
 func (s Stream) To(another Stream) {
 	go func() {
@@ -179,22 +201,22 @@ func Repeat(item interface{}, nTimes ...int) Stream {
 	return Empty()
 }
 
-func Interval(term chan struct{}, interval time.Duration) Stream {
+func Interval(ctx context.Context, interval time.Duration) Stream {
 	source := make(chan interface{})
-	go func(term chan struct{}) {
+	go func() {
 		i := 0
 	OuterLoop:
 		for {
 			select {
-			case <-term:
+			case <-ctx.Done():
 				break OuterLoop
-			case <-time.After(interval):
+			case <-time.Tick(interval):
 				source <- i
+				i++
 			}
-			i++
 		}
 		close(source)
-	}(term)
+	}()
 	return Stream(source)
 }
 

@@ -3,6 +3,8 @@ package stream
 import (
 	"container/ring"
 	"context"
+	"sync"
+	"time"
 )
 
 type gearCreator struct {
@@ -100,4 +102,30 @@ func (c *gearCreator) Min(receiver interface{}, apply CompareFunc) *gearCreator 
 
 	c.add(g)
 	return c
+}
+
+func (c *gearCreator) Every(duration time.Duration, do func()) *gearCreator {
+	started := false
+	g := NewGear(c.ctx, func(v interface{}) interface{} {
+		if !started {
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				started = true
+				wg.Done()
+				ti := time.NewTicker(duration)
+				select {
+				case <-c.ctx.Done():
+					ti.Stop()
+					break
+				case <-ti.C:
+					do()
+				}
+			}()
+			wg.Wait()
+		}
+		return v
+	})
+	c.add(g)
+	return g
 }
