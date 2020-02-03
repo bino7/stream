@@ -57,7 +57,7 @@ func (g *gear) Group(key interface{}) (Gear, error) {
 }
 
 func (g *gear) Create() *gearCreator {
-	return newGearCreator(g.parent, g)
+	return newGearCreator(g.parent, g, nil)
 }
 
 func nextNthGear(g Gear, n int) Gear {

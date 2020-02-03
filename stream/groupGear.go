@@ -63,5 +63,5 @@ func (g *groupGear) Group(key interface{}) (Gear, error) {
 }
 
 func (g *groupGear) Create() *gearCreator {
-	return newGearCreator(g.parent, g)
+	return newGearCreator(g.parent, g, nil)
 }

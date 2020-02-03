@@ -276,7 +276,7 @@ func (s Stream) Skip(nth uint) Stream {
 	return Stream(out)
 }
 
-/*func (s Stream) Sort(apply lib.CompareFunc) Stream{
+/*func (s Source) Sort(apply lib.CompareFunc) Source{
 	heap:=lib.NewHeap(apply)
 	for v:=range s {
 		heap.Push(v)
@@ -381,7 +381,7 @@ func FromOutbound(outbound <-chan interface{}) Stream {
 	return Stream(out)
 }
 
-func Source(apply EmittableFunc) Stream {
+func FromSource(apply EmittableFunc) Stream {
 	out := make(chan interface{})
 	go func() {
 		for {
@@ -392,4 +392,18 @@ func Source(apply EmittableFunc) Stream {
 		}
 	}()
 	return Stream(out)
+}
+
+func Every(duration time.Duration, do func() bool) {
+	go func() {
+		ti := time.NewTicker(duration)
+		for {
+			select {
+			case <-ti.C:
+				if !do() {
+					return
+				}
+			}
+		}
+	}()
 }

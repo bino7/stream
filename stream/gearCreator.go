@@ -8,19 +8,23 @@ import (
 )
 
 type gearCreator struct {
-	ctx   context.Context
-	first Gear
-	last  Gear
+	ctx          context.Context
+	first        Gear
+	last         Gear
+	setFirstGear func(Gear)
 }
 
-func newGearCreator(ctx context.Context, gear Gear) *gearCreator {
-	return &gearCreator{ctx, gear, nil}
+func newGearCreator(ctx context.Context, gear Gear, setFirstGear func(Gear)) *gearCreator {
+	return &gearCreator{ctx, gear, nil, setFirstGear}
 }
 
 func (c *gearCreator) add(g Gear) {
 	if c.first == nil {
 		c.first = g
 		c.last = g
+		if c.setFirstGear != nil {
+			c.setFirstGear(g)
+		}
 	} else {
 		c.last.Link(g)
 		c.last = g
@@ -56,15 +60,16 @@ func (c *gearCreator) RoundRobin(n int, do HandleFunc) *gearCreator {
 	first := ring.New(n)
 	cur := first
 	g := NewGear(c.ctx, func(v interface{}) interface{} {
-		if cur.Value == nil {
-			cur.Value = make(chan interface{}, 1000)
-		}
 		cur.Value.(Stream) <- v
 		cur = cur.Next()
 		return ignore
 	})
-	for cur := first; cur.Next() != first; cur = cur.Next() {
+	var wg sync.WaitGroup
+	wg.Add(n)
+	init := func(cur *ring.Ring) {
 		go func(g Gear) {
+			cur.Value = New(100)
+			wg.Done()
 			select {
 			case v := <-cur.Value.(Stream):
 				nv := do(v)
@@ -76,6 +81,11 @@ func (c *gearCreator) RoundRobin(n int, do HandleFunc) *gearCreator {
 			}
 		}(g)
 	}
+	init(first)
+	for cur := first.Next(); cur != first; cur = cur.Next() {
+		init(cur)
+	}
+	wg.Wait()
 	c.add(g)
 	return c
 }
@@ -127,5 +137,5 @@ func (c *gearCreator) Every(duration time.Duration, do func()) *gearCreator {
 		return v
 	})
 	c.add(g)
-	return g
+	return c
 }
