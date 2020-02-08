@@ -8,32 +8,37 @@ import (
 type (
 	Gear interface {
 		Context() context.Context
-		Do(interface{})
+		Do(interface{}) interface{}
 		Link(Gear) Gear
 		Next() Gear
 		At(int) Gear
-		Group(key interface{}) (Gear, error)
-		Create() *gearCreator
+		Create() *GearCreator
 	}
 
 	gear struct {
-		parent context.Context
-		do     HandleFunc
-		next   Gear
+		ctx  context.Context
+		do   HandleFunc
+		next Gear
 	}
 )
 
-func NewGear(parent context.Context, do func(interface{}) interface{}) Gear {
-	return &gear{parent, do, nil}
+func NewGear(ctx context.Context, do func(interface{}) interface{}) Gear {
+	return &gear{ctx, do, nil}
 }
 func (g *gear) Context() context.Context {
-	return g.parent
+	return g.ctx
 }
-func (g *gear) Do(v interface{}) {
-	nv := g.do(v)
-	if nv != nil && nv != ignore {
-		g.next.Do(v)
+func (g *gear) Do(v interface{}) interface{} {
+	var nv interface{}
+	if g.do == nil {
+		nv = g.do(v)
+	} else {
+		nv = v
 	}
+	if nv != nil && nv != ignore {
+		return g.next.Do(nv)
+	}
+	return nv
 }
 
 func (g *gear) Link(next Gear) Gear {
@@ -56,8 +61,8 @@ func (g *gear) Group(key interface{}) (Gear, error) {
 	return nil, NotGroupGearErr
 }
 
-func (g *gear) Create() *gearCreator {
-	return newGearCreator(g.parent, g, nil)
+func (g *gear) Create() *GearCreator {
+	return newGearCreator(g.ctx, g, nil)
 }
 
 func nextNthGear(g Gear, n int) Gear {

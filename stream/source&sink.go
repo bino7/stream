@@ -6,15 +6,18 @@ import (
 	"sync"
 )
 
-type Source interface {
-	Source() <-chan interface{}
+type Available interface {
 	Available() bool
+}
+type Source interface {
+	SourceAvailable() bool
+	Source() <-chan interface{}
 }
 
 type Sink interface {
+	SinkAvailable() bool
 	Input() chan<- interface{}
 	Accept(interface{}) bool
-	Available() bool
 }
 
 type Dispatcher struct {
@@ -34,7 +37,7 @@ func NewDispatcher(ctx context.Context, source Source) *Dispatcher {
 		defer dispatcher.Unlock()
 		for r := sinks; r != sinks; {
 			sink := r.Value.(Sink)
-			if !sink.Available() {
+			if !sink.SinkAvailable() {
 				r = r.Next()
 				dispatcher.UnRegister(sink)
 			} else if sink.Accept(v) {

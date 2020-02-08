@@ -7,18 +7,22 @@ import (
 	"time"
 )
 
-type gearCreator struct {
+type GearCreator struct {
 	ctx          context.Context
 	first        Gear
 	last         Gear
 	setFirstGear func(Gear)
 }
 
-func newGearCreator(ctx context.Context, gear Gear, setFirstGear func(Gear)) *gearCreator {
-	return &gearCreator{ctx, gear, nil, setFirstGear}
+func newGearCreator(ctx context.Context, gear Gear, setFirstGear func(Gear)) *GearCreator {
+	return &GearCreator{ctx, gear, nil, setFirstGear}
 }
 
-func (c *gearCreator) add(g Gear) {
+func (c *GearCreator) Get() Gear {
+	return c.first
+}
+
+func (c *GearCreator) add(g Gear) {
 	if c.first == nil {
 		c.first = g
 		c.last = g
@@ -30,11 +34,11 @@ func (c *gearCreator) add(g Gear) {
 		c.last = g
 	}
 }
-func (c *gearCreator) Do(do func(interface{}) interface{}) *gearCreator {
+func (c *GearCreator) Do(do func(interface{}) interface{}) *GearCreator {
 	c.add(NewGear(c.ctx, do))
 	return c
 }
-func (c *gearCreator) Filter(apply FilterableFunc) *gearCreator {
+func (c *GearCreator) Filter(apply FilterableFunc) *GearCreator {
 	g := NewGear(c.ctx, func(v interface{}) interface{} {
 		if apply(v) {
 			return v
@@ -45,8 +49,14 @@ func (c *gearCreator) Filter(apply FilterableFunc) *gearCreator {
 	c.add(g)
 	return c
 }
-func (c *gearCreator) GroupBy(keySelectorFunc KeySelectorFunc, handlers GroupHandleFunc, defaultHandler func(k, v interface{}) interface{}) *gearCreator {
+
+/*func (c *GearCreator) GroupBy(keySelectorFunc KeySelectorFunc, handlers GroupHandleFunc, defaultHandler func(k, v interface{}) interface{}) *GearCreator {
 	c.add(newGearGroup(c.ctx, keySelectorFunc, handlers, defaultHandler))
+	return c
+}*/
+
+func (c *GearCreator) Router(keySelectorFunc KeySelectorFunc, gears map[Key]Gear, defaultHandler func(k, v interface{}) interface{}) *GearCreator {
+	c.add(NewRouter(c.ctx, keySelectorFunc, gears, defaultHandler))
 	return c
 }
 
@@ -56,7 +66,7 @@ const (
 	ignore = result(iota)
 )
 
-func (c *gearCreator) RoundRobin(n int, do HandleFunc) *gearCreator {
+func (c *GearCreator) RoundRobin(n int, do HandleFunc) *GearCreator {
 	first := ring.New(n)
 	cur := first
 	g := NewGear(c.ctx, func(v interface{}) interface{} {
@@ -90,7 +100,7 @@ func (c *gearCreator) RoundRobin(n int, do HandleFunc) *gearCreator {
 	return c
 }
 
-func (c *gearCreator) Max(receiver interface{}, apply CompareFunc) *gearCreator {
+func (c *GearCreator) Max(receiver interface{}, apply CompareFunc) *GearCreator {
 	g := NewGear(c.ctx, func(v interface{}) interface{} {
 		if receiver == nil || apply(receiver, v) < 0 {
 			receiver = &v
@@ -102,7 +112,7 @@ func (c *gearCreator) Max(receiver interface{}, apply CompareFunc) *gearCreator 
 	return c
 }
 
-func (c *gearCreator) Min(receiver interface{}, apply CompareFunc) *gearCreator {
+func (c *GearCreator) Min(receiver interface{}, apply CompareFunc) *GearCreator {
 	g := NewGear(c.ctx, func(v interface{}) interface{} {
 		if receiver == nil || apply(receiver, v) > 0 {
 			receiver = &v
@@ -114,7 +124,7 @@ func (c *gearCreator) Min(receiver interface{}, apply CompareFunc) *gearCreator 
 	return c
 }
 
-func (c *gearCreator) Every(duration time.Duration, do func()) *gearCreator {
+func (c *GearCreator) Every(duration time.Duration, do func()) *GearCreator {
 	started := false
 	g := NewGear(c.ctx, func(v interface{}) interface{} {
 		if !started {

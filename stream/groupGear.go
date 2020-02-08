@@ -11,7 +11,7 @@ type groupGear struct {
 	defaultHandler  func(key, v interface{}) interface{}
 }
 
-func newGearGroup(parent context.Context, keySelectorFunc KeySelectorFunc, handlers GroupHandleFunc,
+/*func newGearGroup(parent context.Context, keySelectorFunc KeySelectorFunc, handlers GroupHandleFunc,
 	defaultHandler func(k, v interface{}) interface{}) Gear {
 	return &groupGear{parent, nil, make(map[interface{}]Gear), keySelectorFunc,
 		handlers, defaultHandler}
@@ -62,6 +62,6 @@ func (g *groupGear) Group(key interface{}) (Gear, error) {
 	return nil, nil
 }
 
-func (g *groupGear) Create() *gearCreator {
+func (g *groupGear) Create() *GearCreator {
 	return newGearCreator(g.parent, g, nil)
-}
+}*/
