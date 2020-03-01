@@ -3,7 +3,7 @@ package stream
 import (
 	"container/list"
 	"context"
-	"github.com/chebyrash/promise"
+	"github.com/bino7/promise"
 	"sync"
 	"time"
 )
@@ -17,6 +17,7 @@ type Engine interface {
 	Running() bool
 	Every(duration time.Duration, do func() bool) Engine
 	Do(do func() bool) Engine
+	Put(interface{}) *promise.Promise
 }
 
 type promiseWithValue struct {
@@ -50,8 +51,10 @@ func NewEngine(parent context.Context, stream Stream, gear Gear) Engine {
 func (e *engine) Put(v interface{}) *promise.Promise {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
 	p := promise.New(nil)
 	e.promises.PushBack(&promiseWithValue{p, v})
+	e.Stream <- v
 	return p
 }
 

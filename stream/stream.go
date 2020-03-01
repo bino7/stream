@@ -12,6 +12,9 @@ var log = logger.New("module", "stream")
 type Stream chan interface{}
 
 func New(n int) Stream {
+	if n <= 0 {
+		return make(chan interface{})
+	}
 	return make(chan interface{}, n)
 }
 func (s Stream) IsClosed() bool {
@@ -30,6 +33,10 @@ func (s Stream) Close() {
 		}
 	}()
 	close(s)
+}
+
+func (s Stream) Accept(v interface{}) bool {
+	return true
 }
 
 func (s Stream) To(another Stream) {
@@ -138,13 +145,8 @@ func (s Stream) TakeLast(nth uint) Stream {
 	return Stream(out)
 }
 
-func Just(item interface{}, items ...interface{}) Stream {
+func Just(items ...interface{}) Stream {
 	source := make(chan interface{})
-	if len(items) > 0 {
-		items = append([]interface{}{item}, items...)
-	} else {
-		items = []interface{}{item}
-	}
 
 	go func() {
 		for _, item := range items {
@@ -275,13 +277,6 @@ func (s Stream) Skip(nth uint) Stream {
 	}()
 	return Stream(out)
 }
-
-/*func (s Source) Sort(apply lib.CompareFunc) Source{
-	heap:=lib.NewHeap(apply)
-	for v:=range s {
-		heap.Push(v)
-	}
-}*/
 
 func (s Stream) DistinctUntilChanged(apply KeySelectorFunc) Stream {
 	out := make(chan interface{})

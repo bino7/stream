@@ -2,7 +2,6 @@ package stream
 
 import (
 	"container/ring"
-	"context"
 	"sync"
 )
 
@@ -27,7 +26,7 @@ type Dispatcher struct {
 	sinks  *ring.Ring
 }
 
-func NewDispatcher(ctx context.Context, source Source) *Dispatcher {
+/*func NewDispatcher(ctx context.Context, source Source) *Dispatcher {
 	var mu sync.Mutex
 	engine := NewEngine(ctx, FromOutbound(source.Source()), nil)
 	sinks := ring.New(0)
@@ -48,7 +47,7 @@ func NewDispatcher(ctx context.Context, source Source) *Dispatcher {
 		return nil
 	})
 	return dispatcher
-}
+}*/
 
 func (d *Dispatcher) Register(sink Sink) {
 	d.Lock()

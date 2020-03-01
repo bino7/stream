@@ -31,11 +31,11 @@ func (g *gear) Context() context.Context {
 func (g *gear) Do(v interface{}) interface{} {
 	var nv interface{}
 	if g.do == nil {
-		nv = g.do(v)
-	} else {
 		nv = v
+	} else {
+		nv = g.do(v)
 	}
-	if nv != nil && nv != ignore {
+	if nv != nil && nv != ignore && g.next != nil {
 		return g.next.Do(nv)
 	}
 	return nv
