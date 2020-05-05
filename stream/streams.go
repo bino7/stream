@@ -89,6 +89,16 @@ func (s *Streams) When(test FilterableFunc, apply HandleFunc) *Streams {
 	return s
 }
 
+func (s *Streams) On(test FilterableFunc, apply HandleFunc) *Streams {
+	s.Then(func(v interface{}) interface{} {
+		if test(v) {
+			apply(v)
+		}
+		return v
+	})
+	return s
+}
+
 func (s *Streams) Max(receiver interface{}, apply CompareFunc) *Streams {
 	s.Then(func(v interface{}) interface{} {
 		if receiver == nil || apply(receiver, v) < 0 {
