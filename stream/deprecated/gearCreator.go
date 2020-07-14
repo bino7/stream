@@ -1,8 +1,9 @@
-package stream
+package deprecated
 
 import (
 	"container/ring"
 	"context"
+	"github.com/bino7/stream/stream"
 	"sync"
 	"time"
 )
@@ -38,7 +39,7 @@ func (c *GearCreator) Do(do func(interface{}) interface{}) *GearCreator {
 	c.add(NewGear(c.ctx, do))
 	return c
 }
-func (c *GearCreator) Filter(apply FilterableFunc) *GearCreator {
+func (c *GearCreator) Filter(apply stream.FilterableFunc) *GearCreator {
 	g := NewGear(c.ctx, func(v interface{}) interface{} {
 		if apply(v) {
 			return v
@@ -55,8 +56,8 @@ func (c *GearCreator) Filter(apply FilterableFunc) *GearCreator {
 	return c
 }*/
 
-func (c *GearCreator) Router(keySelectorFunc KeySelectorFunc, gears map[Key]Gear, defaultHandler func(k, v interface{}) interface{}) *GearCreator {
-	c.add(NewRouter(c.ctx, keySelectorFunc, gears, defaultHandler))
+func (c *GearCreator) Router(keySelectorFunc stream.KeySelectorFunc, gears map[stream.Key]Gear, defaultHandler func(k, v interface{}) interface{}) *GearCreator {
+	c.add(stream.NewRouter(c.ctx, keySelectorFunc, gears, defaultHandler))
 	return c
 }
 
@@ -66,11 +67,11 @@ const (
 	ignore = result(iota)
 )
 
-func (c *GearCreator) RoundRobin(n int, do HandleFunc) *GearCreator {
+func (c *GearCreator) RoundRobin(n int, do stream.HandleFunc) *GearCreator {
 	first := ring.New(n)
 	cur := first
 	g := NewGear(c.ctx, func(v interface{}) interface{} {
-		cur.Value.(Stream) <- v
+		cur.Value.(stream.Stream) <- v
 		cur = cur.Next()
 		return ignore
 	})
@@ -78,10 +79,10 @@ func (c *GearCreator) RoundRobin(n int, do HandleFunc) *GearCreator {
 	wg.Add(n)
 	init := func(cur *ring.Ring) {
 		go func(g Gear) {
-			cur.Value = New(100)
+			cur.Value = stream.New(100)
 			wg.Done()
 			select {
-			case v := <-cur.Value.(Stream):
+			case v := <-cur.Value.(stream.Stream):
 				nv := do(v)
 				if g.Next() != nil {
 					g.Next().Do(nv)
@@ -100,7 +101,7 @@ func (c *GearCreator) RoundRobin(n int, do HandleFunc) *GearCreator {
 	return c
 }
 
-func (c *GearCreator) Max(receiver interface{}, apply CompareFunc) *GearCreator {
+func (c *GearCreator) Max(receiver interface{}, apply stream.CompareFunc) *GearCreator {
 	g := NewGear(c.ctx, func(v interface{}) interface{} {
 		if receiver == nil || apply(receiver, v) < 0 {
 			receiver = &v
@@ -112,7 +113,7 @@ func (c *GearCreator) Max(receiver interface{}, apply CompareFunc) *GearCreator 
 	return c
 }
 
-func (c *GearCreator) Min(receiver interface{}, apply CompareFunc) *GearCreator {
+func (c *GearCreator) Min(receiver interface{}, apply stream.CompareFunc) *GearCreator {
 	g := NewGear(c.ctx, func(v interface{}) interface{} {
 		if receiver == nil || apply(receiver, v) > 0 {
 			receiver = &v

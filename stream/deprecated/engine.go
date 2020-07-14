@@ -1,15 +1,16 @@
-package stream
+package deprecated
 
 import (
 	"container/list"
 	"context"
 	"github.com/bino7/promise"
+	"github.com/bino7/stream/stream"
 	"sync"
 	"time"
 )
 
 type Engine interface {
-	Sink
+	stream.Sink
 	Start()
 	Cancel()
 	Create() *GearCreator
@@ -26,9 +27,9 @@ type promiseWithValue struct {
 }
 
 type engine struct {
-	Stream
+	stream.Stream
 	mu     sync.Mutex
-	source Stream
+	source stream.Stream
 	context.Context
 	cancelFunc context.CancelFunc
 	gear       Gear
@@ -38,13 +39,13 @@ type engine struct {
 	promises   *list.List
 }
 
-func NewEngine(parent context.Context, stream Stream, gear Gear) Engine {
+func NewEngine(parent context.Context, stream stream.Stream, gear Gear) Engine {
 	if stream == nil {
 		stream = make(chan interface{}, 1000)
 	}
 	var mu sync.Mutex
 	ctx, cancelFunc := context.WithCancel(parent)
-	return &engine{stream, mu, New(1000), ctx, cancelFunc, gear, false,
+	return &engine{stream, mu, stream.New(1000), ctx, cancelFunc, gear, false,
 		true, nil, list.New()}
 }
 
@@ -96,7 +97,7 @@ func (e *engine) Cancel() {
 }
 
 func (e *engine) Create() *GearCreator {
-	return newGearCreator(e.Context, e.gear, e.setFirstGear)
+	return stream.newGearCreator(e.Context, e.gear, e.setFirstGear)
 }
 
 func (e *engine) setFirstGear(g Gear) {
@@ -104,7 +105,7 @@ func (e *engine) setFirstGear(g Gear) {
 }
 
 func (e *engine) At(n int) Gear {
-	return nextNthGear(e.gear, n)
+	return stream.nextNthGear(e.gear, n)
 }
 func (e *engine) Running() bool {
 	return e.isRunning

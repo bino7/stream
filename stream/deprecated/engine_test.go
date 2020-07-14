@@ -1,17 +1,18 @@
-package stream
+package deprecated
 
 import (
 	"context"
 	"fmt"
+	"github.com/bino7/stream/stream"
 	"testing"
 	"time"
 )
 
 func TestEngine(t *testing.T) {
 	ctx, _ := context.WithCancel(context.Background())
-	s := New(100)
+	s := stream.New(100)
 	eg := NewEngine(ctx, s, nil)
-	getHandler := func(i int) HandleFunc {
+	getHandler := func(i int) stream.HandleFunc {
 		n := i
 		return func(v interface{}) interface{} {
 			fmt.Println(n, ":", v)

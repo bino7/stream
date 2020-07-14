@@ -1,13 +1,16 @@
-package stream
+package deprecated
 
-import "context"
+import (
+	"context"
+	"github.com/bino7/stream/stream"
+)
 
 type groupGear struct {
 	parent          context.Context
 	next            Gear
 	subGears        map[interface{}]Gear
-	keySelectorFunc KeySelectorFunc
-	handlers        GroupHandleFunc
+	keySelectorFunc stream.KeySelectorFunc
+	handlers        stream.GroupHandleFunc
 	defaultHandler  func(key, v interface{}) interface{}
 }
 

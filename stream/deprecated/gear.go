@@ -1,8 +1,9 @@
-package stream
+package deprecated
 
 import (
 	"context"
 	"fmt"
+	"github.com/bino7/stream/stream"
 )
 
 type (
@@ -17,7 +18,7 @@ type (
 
 	gear struct {
 		ctx  context.Context
-		do   HandleFunc
+		do   stream.HandleFunc
 		next Gear
 	}
 )

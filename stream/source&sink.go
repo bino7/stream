@@ -2,6 +2,7 @@ package stream
 
 import (
 	"container/ring"
+	"github.com/bino7/stream/stream/deprecated"
 	"sync"
 )
 
@@ -21,7 +22,7 @@ type Sink interface {
 
 type Dispatcher struct {
 	sync.Mutex
-	Engine
+	deprecated.Engine
 	source Source
 	sinks  *ring.Ring
 }
