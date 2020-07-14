@@ -2,12 +2,9 @@ package stream
 
 import (
 	"context"
-	logger "github.com/inconshreveable/log15"
 	"sync"
 	"time"
 )
-
-var log = logger.New("module", "stream")
 
 type Stream chan interface{}
 

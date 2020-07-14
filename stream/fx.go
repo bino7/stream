@@ -19,7 +19,7 @@ type (
 	KeySelectorFunc func(interface{}) interface{}
 
 	// HandleFunc defines a func that should be passed to the Distinct operator.
-	HandleFunc func(interface{}) interface{}
+	HandleFunc func(interface{}) (interface{}, error)
 
 	ConsumeFunc func(interface{})
 
@@ -28,4 +28,10 @@ type (
 	CompareFunc func(interface{}, interface{}) int
 
 	GroupHandleFunc map[interface{}]HandleFunc
+
+	ErrorHandleFunc func(err error) error
+
+	Max func(receiver interface{}, apply CompareFunc)
+
+	Min func(receiver interface{}, apply CompareFunc)
 )

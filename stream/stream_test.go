@@ -1,8 +1,9 @@
 package stream
 
 import (
-	"testing"
 	"fmt"
+	"log"
+	"testing"
 	"time"
 )
 
@@ -35,13 +36,13 @@ func Test(t *testing.T) {
 
 func Test_to_ch(t *testing.T) {
 	s := Empty()
-	log.Info("", "test", (chan interface{})(s))
+	log.Println(s)
 }
 
 func Test_join(t *testing.T) {
 	s1 := Stream(make(chan interface{}))
 	s2 := Stream(make(chan interface{}))
-	Join(s1,s2)
+	Join(s1, s2)
 
 	go func() {
 		vs := []string{"1", "2", "3", "4", "5"}
@@ -59,7 +60,7 @@ func Test_join(t *testing.T) {
 		}
 	}()
 	for v := range s1 {
-		log.Info("test", "v", v)
+		log.Println(v)
 	}
 }
 
@@ -70,7 +71,7 @@ func Test_stream_vs_channel(t *testing.T) {
 		return num
 	}
 	start := time.Now()
-	for range Range(0,1000) {
+	for range Range(0, 1000) {
 		Just(0).Map(foo).Map(foo).Map(foo).Map(foo).Map(foo).Map(foo).Map(foo).Map(foo).Map(foo).Map(foo)
 	}
 	elapsed := time.Since(start)
@@ -80,7 +81,7 @@ func Test_stream_vs_channel(t *testing.T) {
 		return foo(foo(foo(foo(foo(foo(foo(foo(foo(foo(v))))))))))
 	}
 	start = time.Now()
-	for range Range(0,1000) {
+	for range Range(0, 1000) {
 		Just(0).Map(foos)
 	}
 	elapsed = time.Since(start)
@@ -88,32 +89,32 @@ func Test_stream_vs_channel(t *testing.T) {
 }
 
 func Test_stream_close(t *testing.T) {
-	s:=Stream(make(chan interface{}))
-	foo:=func(v interface{})interface{}{return nil}
-	out:=s.Map(foo)
+	s := Stream(make(chan interface{}))
+	foo := func(v interface{}) interface{} { return nil }
+	out := s.Map(foo)
 	close(s)
-	<- out
-	select{}
+	<-out
+	select {}
 }
 
 func TestStream_Join(t *testing.T) {
-	a:=Range(0,100)
-	b:=Range(200,300)
-	s:=Join(a,b)
-	for v:= range s{
-		fmt.Println(s,v,a,b)
+	a := Range(0, 100)
+	b := Range(200, 300)
+	s := Join(a, b)
+	for v := range s {
+		fmt.Println(s, v, a, b)
 	}
 }
 
 func TestStream_To(t *testing.T) {
-	defer func(){
-		r:=recover()
-		if r!=nil {
-			err:=r.(error)
+	defer func() {
+		r := recover()
+		if r != nil {
+			err := r.(error)
 			panic(err)
 		}
 	}()
-	a:=make(chan interface{})
+	a := make(chan interface{})
 	close(a)
 	a <- 100
 
