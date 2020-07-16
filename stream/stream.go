@@ -67,7 +67,13 @@ func (s Stream) Handle(apply HandleFunc) Stream {
 	go func() {
 		wg.Done()
 		for v := range s {
-			out <- apply(v)
+			res, err := apply(v)
+			if err != nil {
+				out <- err
+			} else {
+				out <- res
+			}
+
 		}
 		close(out)
 	}()

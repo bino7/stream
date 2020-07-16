@@ -117,7 +117,7 @@ func (s *streams) Filter(apply FilterableFunc) Streams {
 func (s *streams) When(test FilterableFunc, apply HandleFunc) Streams {
 	s.Then(func(v interface{}) (interface{}, error) {
 		if test(v) {
-			return apply(v), nil
+			return apply(v)
 		}
 		return v, nil
 	})

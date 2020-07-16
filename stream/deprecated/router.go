@@ -1,8 +1,7 @@
-package stream
+package deprecated
 
 import (
 	"context"
-	"github.com/bino7/stream/stream/deprecated"
 	"sync"
 )
 

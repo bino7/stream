@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/bino7/kube/lib"
-	"github.com/chebyrash/promise"
+	"github.com/bino7/promise"
 	"log"
 	"sync"
 )
