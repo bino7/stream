@@ -168,8 +168,8 @@ func (s *streams2) resolve(resolution interface{}) {
 	}
 	for _, apply := range s.then {
 		switch apply.(type) {
-		case Handler:
-			fn := apply.(Handler)
+		case *Handler:
+			fn := apply.(*Handler)
 			var v interface{}
 			if fn.Before != nil {
 				v = fn.Before
@@ -264,7 +264,7 @@ func (s *streams2) resolve(resolution interface{}) {
 func NodeFuncKey(prefix string, fn interface{}) string {
 	switch fn.(type) {
 	case *Handler:
-		return Streams2NodeFuncKey(prefix, fn.(Handler))
+		return Streams2NodeFuncKey(prefix, fn.(*Handler))
 	case HandleFunc:
 		return HandleFuncKey(prefix, fn.(HandleFunc))
 	default:
@@ -272,7 +272,7 @@ func NodeFuncKey(prefix string, fn interface{}) string {
 	}
 }
 
-func Streams2NodeFuncKey(prefix string, fn Handler) string {
+func Streams2NodeFuncKey(prefix string, fn *Handler) string {
 	name := fn.Name
 	if name == "" {
 		return HandleFuncKey(prefix, fn.Apply)
