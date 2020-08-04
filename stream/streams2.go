@@ -309,12 +309,14 @@ func (s *streams2) Then(apply interface{}) Streams2 {
 	defer s.mutex.Unlock()
 	switch apply.(type) {
 	case *Handler:
+		s.then = append(s.then, apply)
 	case HandleFunc:
-	case func(interface{}) interface{}:
+		s.then = append(s.then, apply)
+	case func(interface{}) (interface{}, error):
+		s.then = append(s.then, apply)
 	default:
 		return s
 	}
-	s.then = append(s.then, apply)
 	return s
 }
 func (s *streams2) Catch(apply ErrorHandleFunc) Streams2 {
