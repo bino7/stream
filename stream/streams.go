@@ -1,52 +1,88 @@
 package stream
 
 import (
-	"container/list"
-	"container/ring"
 	"context"
 	"fmt"
+	"github.com/bino7/kube/lib"
+	"github.com/bino7/promise"
 	"log"
 	"sync"
 )
 
-type Resolve struct {
-	Val interface{}
-}
+const (
+	OnErrorHandle      = "OnErrorHandle"
+	BeforeHandlePrefix = "Before"
+	AfterHandlePrefix  = "After"
+)
 
 type Streams interface {
+	Name() string
 	Input() Stream
-	Put(interface{})
-	Cancel()
-	Then(apply HandleFunc) Streams
-	Catch(apply ErrorHandleFunc) Streams
-	Filter(apply FilterableFunc) Streams
-	When(test FilterableFunc, apply HandleFunc) Streams
-	Max(receiver interface{}, apply CompareFunc) Streams
-	Min(receiver interface{}, apply CompareFunc) Streams
 	Resolve(resolution interface{})
-	Reject(err error)
-	Bind(bounder Stream)
+	Cancel()
 	Close()
+	Then(apply interface{}) Streams
+	Catch(apply ErrorHandleFunc) Streams
+	Pipe(...Streams) Streams
+	Await() (interface{}, error)
+}
+
+type staticStreams struct {
+	state       int
+	ctx         context.Context
+	cancelFunc  context.CancelFunc
+	then        []interface{}
+	catch       []ErrorHandleFunc
+	downStreams []Stream
+	result      interface{}
+	err         error
+	mutex       *sync.Mutex
 }
 
 type streams struct {
+	*staticStreams
 	Stream
-	state                int
-	ctx                  context.Context
-	cancelFunc           context.CancelFunc
-	then                 []HandleFunc
-	catch                []ErrorHandleFunc
-	outbounds            []Stream
-	result               interface{}
-	err                  error
-	stack                *list.List
-	mutex                *sync.Mutex
-	broadcastDeadMessage bool
+	name        string
+	state       int
+	ctx         context.Context
+	cancelFunc  context.CancelFunc
+	then        []interface{}
+	catch       []ErrorHandleFunc
+	downStreams map[string]Streams
+	result      interface{}
+	err         error
+	mutex       *sync.Mutex
+	wg          sync.WaitGroup
 }
 
-func NewStreams(ctx context.Context, buffSize int, broadcastDeadMessage bool) Streams {
+func Static(name string, ctx context.Context, handles ...interface{}) Streams {
+	return newStaticStreams(name, ctx, handles...)
+}
+
+func newStaticStreams(name string, ctx context.Context, handles ...interface{}) Streams {
+	ctx, cancelFunc := context.WithCancel(ctx)
+	if handles == nil {
+		handles = make([]interface{}, 0)
+	}
+	var s = &streams{
+		Stream:      nil,
+		name:        name,
+		ctx:         ctx,
+		cancelFunc:  cancelFunc,
+		then:        handles,
+		catch:       make([]ErrorHandleFunc, 0),
+		downStreams: make(map[string]Streams),
+		result:      nil,
+		err:         nil,
+		mutex:       &sync.Mutex{},
+	}
+	return s
+}
+
+func With(ctx context.Context, buffSize int, handles ...interface{}) Streams {
 	loop := func(s *streams) {
 		for {
+			log.Println("looping")
 			select {
 			case <-s.ctx.Done():
 				s.Cancel()
@@ -56,162 +92,199 @@ func NewStreams(ctx context.Context, buffSize int, broadcastDeadMessage bool) St
 			}
 		}
 	}
-	return newStreams(ctx, buffSize, broadcastDeadMessage, loop)
+	return newStreams(ctx, buffSize, loop, handles...)
 }
 
-func newStreams(ctx context.Context, n int, broadcastDeadMessage bool, loop func(*streams)) Streams {
+func newStreams(ctx context.Context, n int, loop func(*streams), handles ...interface{}) Streams {
 	ctx, cancelFunc := context.WithCancel(ctx)
+	if handles == nil {
+		handles = make([]interface{}, 0)
+	}
 	var s = &streams{
-		Stream:               New(n),
-		ctx:                  ctx,
-		cancelFunc:           cancelFunc,
-		then:                 make([]HandleFunc, 0),
-		catch:                make([]ErrorHandleFunc, 0),
-		outbounds:            make([]Stream, 0),
-		result:               nil,
-		err:                  nil,
-		stack:                list.New(),
-		mutex:                &sync.Mutex{},
-		broadcastDeadMessage: broadcastDeadMessage,
+		Stream:      New(n),
+		ctx:         ctx,
+		cancelFunc:  cancelFunc,
+		then:        handles,
+		catch:       make([]ErrorHandleFunc, 0),
+		downStreams: make(map[string]Streams),
+		result:      nil,
+		err:         nil,
+		mutex:       &sync.Mutex{},
 	}
 	go loop(s)
 	return s
 }
 
+func (s *streams) Name() string {
+	return s.name
+}
 func (s *streams) Input() Stream {
 	return s.Stream
 }
-
-func (s *streams) Put(v interface{}) {
-	s.Stream <- v
-}
-
 func (s *streams) Cancel() {
 	s.cancelFunc()
 }
-
-func (s *streams) Then(apply HandleFunc) Streams {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.then = append(s.then, apply)
-	return s
-}
-
-func (s *streams) Catch(apply ErrorHandleFunc) Streams {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.catch = append(s.catch, apply)
-	return s
-}
-
-func (s *streams) Filter(apply FilterableFunc) Streams {
-	s.Then(func(v interface{}) (interface{}, error) {
-		if apply(v) {
-			return v, nil
-		}
-		return nil, nil
-	})
-	return s
-}
-
-func (s *streams) When(test FilterableFunc, apply HandleFunc) Streams {
-	s.Then(func(v interface{}) (interface{}, error) {
-		if test(v) {
-			return apply(v)
-		}
-		return v, nil
-	})
-	return s
-}
-
-func (s *streams) On(test FilterableFunc, apply HandleFunc) Streams {
-	s.Then(func(v interface{}) (interface{}, error) {
-		if test(v) {
-			apply(v)
-		}
-		return v, nil
-	})
-	return s
-}
-
-func (s *streams) Max(receiver interface{}, apply CompareFunc) Streams {
-	s.Then(func(v interface{}) (interface{}, error) {
-		if receiver == nil || apply(receiver, v) < 0 {
-			receiver = &v
-		}
-		return v, nil
-	})
-	return s
-}
-
-func (s *streams) Min(receiver interface{}, apply CompareFunc) Streams {
-	s.Then(func(v interface{}) (interface{}, error) {
-		if receiver == nil || apply(receiver, v) > 0 {
-			receiver = &v
-		}
-		return v, nil
-	})
-	return s
-}
-
 func (s *streams) Resolve(resolution interface{}) {
 	if resolution == nil {
 		return
 	}
 	s.mutex.Lock()
-	s.stack.PushBack(resolution)
+	s.wg = sync.WaitGroup{}
+	s.wg.Add(1)
 	s.resolve(resolution)
+	s.wg.Done()
 	s.mutex.Unlock()
 }
+func (s *streams) resolveResult(result interface{}, err error) bool {
+	s.result = result
+	s.err = err
+	if err != nil {
+		s.reject(err)
+		return false
+	}
 
+	if s.result == nil {
+		return false
+	}
+	switch s.result.(type) {
+	case *promise.Promise:
+		p := s.result.(*promise.Promise)
+		res, err := p.Await()
+		if err != nil {
+			s.reject(err)
+			return false
+		}
+		s.result = res
+	case error:
+		err := s.result.(error)
+		s.reject(err)
+		return false
+	}
+	return true
+}
 func (s *streams) resolve(resolution interface{}) {
-	s.result = resolution
-
-	for _, fn := range s.then {
-		s.result, s.err = fn(s.result)
-		if s.err != nil {
-			s.mutex.Unlock()
-			s.Reject(s.err)
-			break
-		}
-		switch s.result.(type) {
-
-		case error:
-			err := s.result.(error)
-			s.mutex.Unlock()
-			s.Reject(err)
-			break
-		}
+	if !s.resolveResult(resolution, nil) {
+		return
 	}
-
-	/*if s.result!=nil && s.broadcast(0) == false {
-		s.unHandle(s.result)
-	}*/
-}
-
-func (s *streams) broadcast(i int) bool {
-	log.Println("broadcast")
-	handled := false
-	for j := i; j < len(s.outbounds); j++ {
-		b := s.outbounds[j]
-		if b.IsClosed() {
-			lastOne := i == len(s.outbounds)-1
-			s.outbounds = append(s.outbounds[0:i], s.outbounds[i+1:len(s.outbounds)]...)
-			if !lastOne {
-				return handled || s.broadcast(i)
+	for _, apply := range s.then {
+		switch apply.(type) {
+		case *Handler:
+			fn := apply.(*Handler)
+			var v interface{}
+			if fn.Before != nil {
+				v = fn.Before
+			} else {
+				v = s.ctx.Value(NodeFuncKey(BeforeHandlePrefix, fn))
 			}
-			break
+			if v != nil {
+				before := v.(HandleFunc)
+				if !s.resolveResult(before(s.result)) {
+					break
+				}
+			}
+			if !s.resolveResult(fn.Eval(s.result)) {
+				break
+			}
+
+			if fn.After != nil {
+				v = fn.After
+			} else {
+				v = s.ctx.Value(NodeFuncKey(AfterHandlePrefix, fn))
+			}
+			if v != nil {
+				after := v.(HandleFunc)
+				if !s.resolveResult(after(s.result)) {
+					break
+				}
+			}
+
+			if fn.Pipes != nil {
+				for _, p := range fn.Pipes {
+					p <- s.result
+				}
+			}
+		case SliceHandler:
+			fn := apply.(SliceHandler)
+			var v interface{}
+			if fn.Before != nil {
+				v = fn.Before
+			} else {
+				v = s.ctx.Value(NodeFuncKey(BeforeHandlePrefix, fn))
+			}
+			if v != nil {
+				before := v.(HandleFunc)
+				if !s.resolveResult(before(s.result)) {
+					break
+				}
+			}
+			if !s.resolveResult(fn.Eval(s.result)) {
+				break
+			}
+
+			if fn.After != nil {
+				v = fn.After
+			} else {
+				v = s.ctx.Value(NodeFuncKey(AfterHandlePrefix, fn))
+			}
+			if v != nil {
+				after := v.(HandleFunc)
+				if !s.resolveResult(after(s.result)) {
+					break
+				}
+			}
+
+			if fn.Pipes != nil {
+				for _, p := range fn.Pipes {
+					p <- s.result
+				}
+			}
+		case HandleFunc:
+		case func(interface{}) (interface{}, error):
+			fn := apply.(func(interface{}) (interface{}, error))
+			if v := s.ctx.Value(NodeFuncKey(BeforeHandlePrefix, fn)); v != nil {
+				before := v.(func(interface{}) (interface{}, error))
+				if !s.resolveResult(before(s.result)) {
+					break
+				}
+			}
+			if !s.resolveResult(fn(s.result)) {
+				break
+			}
+			if v := s.ctx.Value(NodeFuncKey(AfterHandlePrefix, fn)); v != nil {
+				after := v.(func(interface{}) (interface{}, error))
+				if !s.resolveResult(after(s.result)) {
+					break
+				}
+			}
 		}
-		if b.Accept(s.result) {
-			b <- s.result
-			handled = true
-		}
+
 	}
-	return handled
 }
 
-func (s *streams) Reject(err error) {
-	s.mutex.Lock()
+func NodeFuncKey(prefix string, fn interface{}) string {
+	switch fn.(type) {
+	case *Handler:
+		return Streams2NodeFuncKey(prefix, fn.(*Handler))
+	case HandleFunc:
+		return HandleFuncKey(prefix, fn.(HandleFunc))
+	default:
+		return ""
+	}
+}
+
+func Streams2NodeFuncKey(prefix string, fn *Handler) string {
+	name := fn.Name
+	if name == "" {
+		return HandleFuncKey(prefix, fn.Apply)
+	}
+	return fmt.Sprintf("%s-%s", prefix, fn.Name)
+}
+func HandleFuncKey(prefix string, fn HandleFunc) string {
+	pkg, name, _ := lib.FuncName(fn)
+	return fmt.Sprintf("%s-%s-%s", prefix, pkg, name)
+}
+
+func (s *streams) reject(err error) {
 	if err != nil {
 		s.err = err
 	}
@@ -221,103 +294,47 @@ func (s *streams) Reject(err error) {
 			s.err = err
 		}
 	}
-	s.mutex.Unlock()
+	if v := s.ctx.Value(OnErrorHandle); v != nil {
+		if onErrorHandle, ok := v.(ErrorHandleFunc); ok {
+			_ = onErrorHandle(s.err)
+		}
+	}
 }
-
-func (s *streams) Bind(bounder Stream) {
-	s.mutex.Lock()
-	s.outbounds = append(s.outbounds, bounder)
-	s.mutex.Unlock()
-}
-
 func (s *streams) Close() {
-	if !s.IsClosed() {
-		s.cancelFunc()
-		s.Stream.Close()
-	}
+	s.Stream.Close()
+	s.Cancel()
 }
-
-func (s *streams) unHandle(v interface{}) {
-	fmt.Println("unHandle ", v)
-}
-
-type RoundRobin struct {
-	*streams
-	ring        *ring.Ring
-	creatWorker func(context.Context, int) *streams
-}
-
-func NewRoundRobin(ctx context.Context, buffSize, n int, creatWorker func(context.Context, int) *streams) *RoundRobin {
-	var roundRobin *RoundRobin
-	loop := func(s *streams) {
-		for {
-			select {
-			case <-s.ctx.Done():
-				s.Cancel()
-				break
-			case v := <-s.Stream:
-				roundRobin.Resolve(v)
-			}
-		}
-	}
-	first := roundRobin.ring
-	first.Value = creatWorker(ctx, buffSize)
-	for next := first.Next(); next != first; next = next.Next() {
-		next.Value = creatWorker(ctx, buffSize)
-	}
-
-	ctx, cancelFunc := context.WithCancel(ctx)
-	var s = &streams{
-		Stream:               New(n),
-		ctx:                  ctx,
-		cancelFunc:           cancelFunc,
-		then:                 make([]HandleFunc, 0),
-		catch:                make([]ErrorHandleFunc, 0),
-		outbounds:            make([]Stream, 0),
-		result:               nil,
-		err:                  nil,
-		mutex:                &sync.Mutex{},
-		broadcastDeadMessage: false,
-	}
-	go loop(s)
-
-	roundRobin = &RoundRobin{
-		streams:     s,
-		ring:        first,
-		creatWorker: creatWorker,
-	}
-
-	return roundRobin
-}
-
-func (s *RoundRobin) Resolve(resolution interface{}) {
+func (s *streams) Then(apply interface{}) Streams {
 	s.mutex.Lock()
-	if resolution != nil {
-		switch resolution.(type) {
-		case error:
-			err := resolution.(error)
-			s.mutex.Unlock()
-			s.Reject(err)
-		default:
-			s.result = resolution
-			cur := s.ring
-			curStreams := cur.Value.(*streams)
-			if curStreams.Accept(s.result) {
-				curStreams.Resolve(s.result)
-				cur = cur.Next()
-				s.mutex.Unlock()
-				return
-			}
-			for next := cur.Next(); next != cur; next = next.Next() {
-				nextStreams := next.Value.(*streams)
-				if nextStreams.Accept(s.result) {
-					nextStreams.Resolve(s.result)
-					s.mutex.Unlock()
-					return
-				}
-			}
-		}
+	defer s.mutex.Unlock()
+	switch apply.(type) {
+	case *Handler:
+		s.then = append(s.then, apply)
+	case HandleFunc:
+		s.then = append(s.then, apply)
+	case func(interface{}) (interface{}, error):
+		s.then = append(s.then, apply)
+	default:
+		return s
 	}
-	s.mutex.Unlock()
-	s.unHandle(s.result)
+	return s
+}
+func (s *streams) Catch(apply ErrorHandleFunc) Streams {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.catch = append(s.catch, apply)
+	return s
+}
+func (s *streams) Pipe(streams ...Streams) Streams {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	for _, strm := range streams {
+		s.downStreams[strm.Name()] = strm
+	}
+	return s
+}
+
+func (s *streams) Await() (interface{}, error) {
+	s.wg.Wait()
+	return s.result, s.err
 }
