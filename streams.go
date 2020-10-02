@@ -79,7 +79,7 @@ func newStaticStreams(name string, ctx context.Context, handles ...interface{}) 
 	return s
 }
 
-func With(ctx context.Context, buffSize int, handles ...interface{}) Streams {
+func With(name string, ctx context.Context, buffSize int, handles ...interface{}) Streams {
 	loop := func(s *streams) {
 		for {
 			log.Println("looping")
@@ -92,16 +92,17 @@ func With(ctx context.Context, buffSize int, handles ...interface{}) Streams {
 			}
 		}
 	}
-	return newStreams(ctx, buffSize, loop, handles...)
+	return newStreams(name, ctx, buffSize, loop, handles...)
 }
 
-func newStreams(ctx context.Context, n int, loop func(*streams), handles ...interface{}) Streams {
+func newStreams(name string, ctx context.Context, n int, loop func(*streams), handles ...interface{}) Streams {
 	ctx, cancelFunc := context.WithCancel(ctx)
 	if handles == nil {
 		handles = make([]interface{}, 0)
 	}
 	var s = &streams{
 		Stream:      New(n),
+		name:        name,
 		ctx:         ctx,
 		cancelFunc:  cancelFunc,
 		then:        handles,
