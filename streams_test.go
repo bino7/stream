@@ -18,14 +18,14 @@ func TestWith(t *testing.T) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, "Before-1st", HandleFunc(func(v interface{}) (interface{}, error) {
 		fmt.Println("Before foo")
-		return v, nil
+		return nil, nil
 	}))
 	s := Static("test", ctx,
 		&Handler{
 			Name:  "1st",
 			Apply: foo,
 			Pipes: []Stream{
-				With(ctx, 100,
+				With("test", ctx, 100,
 					&Handler{
 						Name:  "3st",
 						Apply: foo3,
@@ -43,7 +43,7 @@ func TestWith(t *testing.T) {
 		fmt.Println(v)
 		return v
 	})
-	s.Resolve("wtf")
+	s.Resolve(nil)
 	go func() {
 		for range time.Tick(1 * time.Second) {
 		}

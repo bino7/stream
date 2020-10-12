@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/bino7/kube/lib"
 	"github.com/bino7/promise"
-	"log"
 	"sync"
 )
 
@@ -82,7 +81,6 @@ func newStaticStreams(name string, ctx context.Context, handles ...interface{}) 
 func With(name string, ctx context.Context, buffSize int, handles ...interface{}) Streams {
 	loop := func(s *streams) {
 		for {
-			log.Println("looping")
 			select {
 			case <-s.ctx.Done():
 				s.Cancel()
@@ -183,7 +181,8 @@ func (s *streams) resolve(resolution interface{}) {
 					break
 				}
 			}
-			if !s.resolveResult(fn.Eval(s.result)) {
+			r, err := fn.Eval(s.result)
+			if !s.resolveResult(r, err) {
 				break
 			}
 
