@@ -20,7 +20,7 @@ func TestWith(t *testing.T) {
 		fmt.Println("Before foo")
 		return nil, nil
 	}))
-	s := Static("test", ctx,
+	s := Once("test", ctx,
 		&Handler{
 			Name:  "1st",
 			Apply: foo,

@@ -54,7 +54,7 @@ type streams struct {
 	wg          sync.WaitGroup
 }
 
-func Static(name string, ctx context.Context, handles ...interface{}) Streams {
+func Once(name string, ctx context.Context, handles ...interface{}) Streams {
 	return newStaticStreams(name, ctx, handles...)
 }
 
