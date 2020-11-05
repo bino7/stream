@@ -26,20 +26,7 @@ type Streams interface {
 	Await() (interface{}, error)
 }
 
-type staticStreams struct {
-	state       int
-	ctx         context.Context
-	cancelFunc  context.CancelFunc
-	then        []interface{}
-	catch       []ErrorHandleFunc
-	downStreams []Stream
-	result      interface{}
-	err         error
-	mutex       *sync.Mutex
-}
-
 type streams struct {
-	*staticStreams
 	Stream
 	name        string
 	state       int
@@ -54,17 +41,30 @@ type streams struct {
 	wg          sync.WaitGroup
 }
 
-func Once(name string, ctx context.Context, handles ...interface{}) Streams {
-	return newStaticStreams(name, ctx, handles...)
+type OnceStreams struct {
+	*streams
 }
 
-func newStaticStreams(name string, ctx context.Context, handles ...interface{}) Streams {
+func Once(name string, ctx context.Context, handles ...interface{}) *OnceStreams {
 	ctx, cancelFunc := context.WithCancel(ctx)
 	if handles == nil {
 		handles = make([]interface{}, 0)
 	}
-	var s = &streams{
-		Stream:      nil,
+	var s *streams
+
+	input := New(1)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		wg.Done()
+		v := input
+		input.Close()
+		s.resolve(v)
+	}()
+	wg.Wait()
+
+	s = &streams{
+		Stream:      input,
 		name:        name,
 		ctx:         ctx,
 		cancelFunc:  cancelFunc,
@@ -75,7 +75,39 @@ func newStaticStreams(name string, ctx context.Context, handles ...interface{}) 
 		err:         nil,
 		mutex:       &sync.Mutex{},
 	}
-	return s
+	return &OnceStreams{s}
+}
+
+func OnceWithFilter(name string, ctx context.Context, filter FilterableFunc, handles ...interface{}) *OnceStreams {
+	ctx, cancelFunc := context.WithCancel(ctx)
+	if handles == nil {
+		handles = make([]interface{}, 0)
+	}
+	var s *streams
+
+	s = &streams{
+		Stream:      New(100),
+		name:        name,
+		ctx:         ctx,
+		cancelFunc:  cancelFunc,
+		then:        handles,
+		catch:       make([]ErrorHandleFunc, 0),
+		downStreams: make(map[string]Streams),
+		result:      nil,
+		err:         nil,
+		mutex:       &sync.Mutex{},
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		wg.Done()
+		v := <-s.Input().Filter(filter).First()
+		s.resolve(v)
+	}()
+	wg.Wait()
+
+	return &OnceStreams{s}
 }
 
 func With(name string, ctx context.Context, buffSize int, handles ...interface{}) Streams {

@@ -14,6 +14,7 @@ func New(n int) Stream {
 	}
 	return make(chan interface{}, n)
 }
+
 func (s Stream) IsClosed() bool {
 	select {
 	case <-s:
@@ -60,25 +61,27 @@ func (s Stream) To(another Stream) {
 		}
 	}()
 }
-func (s Stream) Handle(apply HandleFunc) Stream {
+func (s Stream) Handle(apply HandleFunc) (Stream, Stream) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	out := make(chan interface{})
+	errs := make(chan interface{})
 	go func() {
 		wg.Done()
 		for v := range s {
 			res, err := apply(v)
 			if err != nil {
-				out <- err
+				errs <- err
 			} else {
 				out <- res
 			}
 
 		}
 		close(out)
+		close(errs)
 	}()
 	wg.Wait()
-	return Stream(out)
+	return Stream(out), Stream(errs)
 }
 
 func (s Stream) Consume(apply ConsumeFunc) {
