@@ -84,12 +84,13 @@ func (s Stream) Handle(apply HandleFunc) (Stream, Stream) {
 	return Stream(out), Stream(errs)
 }
 
-func (s Stream) Consume(apply ConsumeFunc) {
+func (s Stream) Consume(apply ConsumeFunc) Stream {
 	go func() {
 		for v := range s {
 			apply(v)
 		}
 	}()
+	return s
 }
 
 func (s Stream) Classify(apply ClassifyFunc, handlers map[string]Stream, deadHandler Stream) {

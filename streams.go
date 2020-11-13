@@ -52,19 +52,8 @@ func Once(name string, ctx context.Context, handles ...interface{}) *OnceStreams
 	}
 	var s *streams
 
-	input := New(1)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		wg.Done()
-		v := input
-		input.Close()
-		s.resolve(v)
-	}()
-	wg.Wait()
-
 	s = &streams{
-		Stream:      input,
+		Stream:      nil,
 		name:        name,
 		ctx:         ctx,
 		cancelFunc:  cancelFunc,
@@ -75,38 +64,6 @@ func Once(name string, ctx context.Context, handles ...interface{}) *OnceStreams
 		err:         nil,
 		mutex:       &sync.Mutex{},
 	}
-	return &OnceStreams{s}
-}
-
-func OnceWithFilter(name string, ctx context.Context, filter FilterableFunc, handles ...interface{}) *OnceStreams {
-	ctx, cancelFunc := context.WithCancel(ctx)
-	if handles == nil {
-		handles = make([]interface{}, 0)
-	}
-	var s *streams
-
-	s = &streams{
-		Stream:      New(100),
-		name:        name,
-		ctx:         ctx,
-		cancelFunc:  cancelFunc,
-		then:        handles,
-		catch:       make([]ErrorHandleFunc, 0),
-		downStreams: make(map[string]Streams),
-		result:      nil,
-		err:         nil,
-		mutex:       &sync.Mutex{},
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		wg.Done()
-		v := <-s.Input().Filter(filter).First()
-		s.resolve(v)
-	}()
-	wg.Wait()
-
 	return &OnceStreams{s}
 }
 
@@ -177,6 +134,7 @@ func (s *streams) resolveResult(result interface{}, err error) bool {
 	if s.result == nil {
 		return false
 	}
+
 	switch s.result.(type) {
 	case *promise.Promise:
 		p := s.result.(*promise.Promise)
@@ -197,6 +155,7 @@ func (s *streams) resolve(resolution interface{}) {
 	if !s.resolveResult(resolution, nil) {
 		return
 	}
+loop:
 	for _, apply := range s.then {
 		switch apply.(type) {
 		case *Handler:
@@ -210,12 +169,12 @@ func (s *streams) resolve(resolution interface{}) {
 			if v != nil {
 				before := v.(HandleFunc)
 				if !s.resolveResult(before(s.result)) {
-					break
+					break loop
 				}
 			}
 			r, err := fn.Eval(s.result)
 			if !s.resolveResult(r, err) {
-				break
+				break loop
 			}
 
 			if fn.After != nil {
@@ -226,7 +185,7 @@ func (s *streams) resolve(resolution interface{}) {
 			if v != nil {
 				after := v.(HandleFunc)
 				if !s.resolveResult(after(s.result)) {
-					break
+					break loop
 				}
 			}
 
@@ -246,11 +205,11 @@ func (s *streams) resolve(resolution interface{}) {
 			if v != nil {
 				before := v.(HandleFunc)
 				if !s.resolveResult(before(s.result)) {
-					break
+					break loop
 				}
 			}
 			if !s.resolveResult(fn.Eval(s.result)) {
-				break
+				break loop
 			}
 
 			if fn.After != nil {
@@ -261,7 +220,7 @@ func (s *streams) resolve(resolution interface{}) {
 			if v != nil {
 				after := v.(HandleFunc)
 				if !s.resolveResult(after(s.result)) {
-					break
+					break loop
 				}
 			}
 
@@ -276,16 +235,16 @@ func (s *streams) resolve(resolution interface{}) {
 			if v := s.ctx.Value(NodeFuncKey(BeforeHandlePrefix, fn)); v != nil {
 				before := v.(func(interface{}) (interface{}, error))
 				if !s.resolveResult(before(s.result)) {
-					break
+					break loop
 				}
 			}
 			if !s.resolveResult(fn(s.result)) {
-				break
+				break loop
 			}
 			if v := s.ctx.Value(NodeFuncKey(AfterHandlePrefix, fn)); v != nil {
 				after := v.(func(interface{}) (interface{}, error))
 				if !s.resolveResult(after(s.result)) {
-					break
+					break loop
 				}
 			}
 		}
@@ -321,7 +280,7 @@ func (s *streams) reject(err error) {
 		s.err = err
 	}
 	for _, fn := range s.catch {
-		err := fn(s.err)
+		err = fn(s.err)
 		if err != nil {
 			s.err = err
 		}
