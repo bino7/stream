@@ -85,11 +85,15 @@ func (s Stream) Handle(apply HandleFunc) (Stream, Stream) {
 }
 
 func (s Stream) Consume(apply ConsumeFunc) Stream {
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		wg.Done()
 		for v := range s {
 			apply(v)
 		}
 	}()
+	wg.Wait()
 	return s
 }
 
