@@ -3,8 +3,6 @@ package stream
 import (
 	"context"
 	"fmt"
-	"github.com/bino7/kube/lib"
-	"github.com/bino7/promise"
 	"sync"
 )
 
@@ -136,8 +134,8 @@ func (s *streams) resolveResult(result interface{}, err error) bool {
 	}
 
 	switch s.result.(type) {
-	case *promise.Promise:
-		p := s.result.(*promise.Promise)
+	case *Promise:
+		p := s.result.(*Promise)
 		res, err := p.Await()
 		if err != nil {
 			s.reject(err)
@@ -271,7 +269,7 @@ func Streams2NodeFuncKey(prefix string, fn *Handler) string {
 	return fmt.Sprintf("%s-%s", prefix, fn.Name)
 }
 func HandleFuncKey(prefix string, fn HandleFunc) string {
-	pkg, name, _ := lib.FuncName(fn)
+	pkg, name, _ := FuncName(fn)
 	return fmt.Sprintf("%s-%s-%s", prefix, pkg, name)
 }
 
