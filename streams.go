@@ -13,7 +13,7 @@ const (
 )
 
 type Streams interface {
-	Name() string
+	StreamName() string
 	Input() Stream
 	Resolve(resolution interface{})
 	Cancel()
@@ -101,7 +101,7 @@ func newStreams(name string, ctx context.Context, n int, loop func(*streams), ha
 	return s
 }
 
-func (s *streams) Name() string {
+func (s *streams) StreamName() string {
 	return s.name
 }
 func (s *streams) Input() Stream {
@@ -318,7 +318,7 @@ func (s *streams) Pipe(streams ...Streams) Streams {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	for _, strm := range streams {
-		s.downStreams[strm.Name()] = strm
+		s.downStreams[strm.StreamName()] = strm
 	}
 	return s
 }
