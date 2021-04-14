@@ -27,7 +27,7 @@ func TestOnce(t *testing.T) {
 
 func TestStreams(t *testing.T) {
 	ctx, _ := context.WithCancel(context.Background())
-	s, err := NewStreams("OnceTest", ctx, 100, f1, f3)
+	s, err := NewStreams("StreamsTest", ctx, 100, f1, f3)
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -38,6 +38,7 @@ func TestStreams(t *testing.T) {
 			c++
 			return Goto(1), nil
 		}
+		s.Close()
 		return nil, nil
 	})
 	s.Input() <- "wtf"
