@@ -3,77 +3,62 @@ package stream
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"testing"
-	"time"
 )
 
-func TestF(t *testing.T) {
-	var v []string
-	fmt.Println(reflect.TypeOf(v).Kind())
-
-}
-func TestWith(t *testing.T) {
-	done := make(chan struct{})
+func TestOnce(t *testing.T) {
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, "Before-1st", HandleFunc(func(v interface{}) (interface{}, error) {
-		fmt.Println("Before foo")
-		return nil, nil
-	}))
-	s := Once("test", ctx,
-		&Handler{
-			Name:  "1st",
-			Apply: foo,
-			Pipes: []Stream{
-				With("test", ctx, 100,
-					&Handler{
-						Name:  "3st",
-						Apply: foo3,
-						Pipes: nil,
-					}).Input(),
-			},
-		},
-		&Handler{
-			Name:  "2nd",
-			Apply: HandleFunc(foo),
-			Pipes: []Stream{},
-		},
-	)
-	s.Then(func(v interface{}) interface{} {
-		fmt.Println(v)
-		return v
-	})
-	s.Resolve(nil)
-	go func() {
-		for range time.Tick(1 * time.Second) {
+	s, err := Once("OnceTest", ctx, f1, f3, f1, f3)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	c := 0
+	s.Then(func(v interface{}) (interface{}, error) {
+		if c < 10 {
+			c++
+			return Goto(1), nil
 		}
-	}()
-	<-done
+		return nil, nil
+
+	})
+	s.Resolve("wtf")
 }
 
-func foo(v interface{}) (interface{}, error) {
+func TestStreams(t *testing.T) {
+	ctx, _ := context.WithCancel(context.Background())
+	s, err := NewStreams("OnceTest", ctx, 100, f1, f3)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	c := 0
+	s.Then(func(v interface{}) (interface{}, error) {
+		if c < 10 {
+			c++
+			return Goto(1), nil
+		}
+		return nil, nil
+	})
+	s.Input() <- "wtf"
+	<-s.Done()
+	t.Log("success!")
+}
+
+func f1(v interface{}) (interface{}, error) {
 	v = fmt.Sprintf("foo-%s", v)
 	fmt.Println(v)
 	return v, nil
 }
-func foo3(v interface{}) (interface{}, error) {
+func f3(v interface{}) (interface{}, error) {
 	v = fmt.Sprintf("foo3-%s", v)
 	fmt.Println(v)
 	return v, nil
 }
 
-func TestFoo(t *testing.T) {
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, "Before-1st", HandleFunc(func(v interface{}) (interface{}, error) {
-		fmt.Println("Before foo")
-		return v, nil
-	}))
-	h1 := &Handler{
-		Name:  "1st",
-		Apply: foo,
-		Pipes: []Stream{New(10), New(10), New(10)},
-	}
-	fmt.Println(h1.Before == nil, f(h1.Before, ctx.Value("Before-1st")), ctx.Value("Before-1st"))
+func f2(v interface{}) (interface{}, error) {
+	fmt.Println("END")
+	return nil, nil
 }
 
 func f(vs ...interface{}) interface{} {
