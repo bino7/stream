@@ -24,6 +24,7 @@ func (s Stream) IsClosed() bool {
 
 	return false
 }
+
 func (s Stream) Close() {
 	defer func() {
 		if recover() != nil {

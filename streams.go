@@ -16,7 +16,6 @@ type Streams interface {
 	Name() string
 	Input() Stream
 	Resolve(resolution interface{})
-	Cancel()
 	Close()
 	Then(apply interface{}) Streams
 	Catch(apply ErrorHandleFunc) Streams
@@ -105,16 +104,15 @@ func newStreams(name string, ctx context.Context, buffSize int, steps ...interfa
 func (s *streams) Len() int {
 	return len(s.then)
 }
+
 func (s *streams) Name() string {
 	return s.name
 }
+
 func (s *streams) Input() Stream {
 	return s.Stream
 }
-func (s *streams) Cancel() {
-	s.cancelFunc()
-	s.done <- struct{}{}
-}
+
 func (s *streams) Resolve(resolution interface{}) {
 	if resolution == nil {
 		return
@@ -193,8 +191,9 @@ func (s *streams) reject(err error) {
 }
 
 func (s *streams) Close() {
+	s.cancelFunc()
+	s.done <- struct{}{}
 	s.Stream.Close()
-	s.Cancel()
 }
 
 func (s *streams) Then(step interface{}) Streams {
